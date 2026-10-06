@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{APP_NAME}} - Cardapio Online</title>
+  <style>
+    :root{--bg:#101522;--panel:#20283b;--text:#fff;--muted:#b9c5dd;--brand:#f5820b;--line:#3b4662}
+    *{box-sizing:border-box}body{margin:0;background:linear-gradient(180deg,#1e2638,#0f1420);color:var(--text);font-family:Verdana,Arial,sans-serif}.wrap{max-width:760px;margin:0 auto;padding:24px}.hero{text-align:center;padding:26px 0;border-bottom:1px solid var(--line)}.badge{display:inline-block;border:1px solid #8a5a22;border-radius:999px;padding:8px 12px;color:#ffd59b;background:#382517}.cat{margin:24px 0 10px;color:#ffb23f;text-transform:uppercase;letter-spacing:.08em}.card{display:flex;gap:14px;align-items:center;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;margin:10px 0}.card img{width:72px;height:72px;object-fit:cover;border-radius:10px;background:#111827}.info{flex:1}.name{font-weight:800}.price{color:#ffb23f;font-weight:800}.btn{border:0;border-radius:10px;background:var(--brand);color:#fff;font-weight:800;padding:11px 14px;cursor:pointer}.cart{position:sticky;bottom:0;background:#151b2b;border-top:1px solid var(--line);padding:14px;margin:30px -24px -24px}.field{width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);background:#0e1422;color:#fff;margin:6px 0}.muted{color:var(--muted);font-size:13px}.closed{border:1px solid #7a2d2d;background:#361b22;color:#ffd4d4;border-radius:12px;padding:12px;margin:14px 0}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>{{ESTABELECIMENTO_NOME}}</h1>
+      <p class="muted">{{ESTABELECIMENTO_SUBTITULO}}</p>
+      <span class="badge">Pedidos online</span>
+    </header>
+    <div id="status"></div>
+    <main id="lista"></main>
+    <section class="cart">
+      <strong>Carrinho: <span id="cartCount">0</span> item(ns)</strong>
+      <div class="muted" id="cartTotal">Total R$ 0,00</div>
+      <input class="field" id="clienteNome" placeholder="Seu nome">
+      <input class="field" id="clienteTelefone" placeholder="Telefone/WhatsApp">
+      <input class="field" id="clienteEndereco" placeholder="Endereco, se for delivery">
+      <select class="field" id="tipoEntrega"><option value="retirada">Retirada</option><option value="delivery">Delivery</option></select>
+      <select class="field" id="formaPagamento"><option>Pix</option><option>Dinheiro</option><option>Credito</option><option>Debito</option></select>
+      <textarea class="field" id="observacao" placeholder="Observacao"></textarea>
+      <button class="btn" onclick="finalizarPedido()">Finalizar pedido</button>
+    </section>
+  </div>
+<script>
+const CONFIG = window.MENU_CONFIG || {
+  apiUrl: '{{API_URL}}',
+  codigo: '{{CODIGO}}',
+  pedidoToken: '{{PEDIDO_TOKEN}}',
+  whatsapp: '{{WHATSAPP}}',
+  produtos: []
+}
+const carrinho = []
+const money = n => Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})
+function render(){
+  const grupos = {}
+  CONFIG.produtos.filter(p=>p.disponivel!==false).forEach(p=>{ const c=p.categoria||'Outros'; (grupos[c] ||= []).push(p) })
+  lista.innerHTML = Object.entries(grupos).map(([cat,items]) => `<h2 class="cat">${cat}</h2>` + items.map(p => `<article class="card"><img src="${p.imagem||''}" alt=""><div class="info"><div class="name">${p.nome}</div><div class="muted">${p.descricao||''}</div><div class="price">${money(p.preco)}</div></div><button class="btn" onclick='add(${JSON.stringify(p).replaceAll("'","&#39;")})'>Adicionar</button></article>`).join('')).join('')
+}
+function add(p){ carrinho.push({produto_id:p.id||'',nome:p.nome,preco:Number(p.preco||0),qtd:1,obs:'',setor_preparo:p.setor_preparo||''}); updateCart() }
+function updateCart(){ cartCount.textContent=carrinho.length; cartTotal.textContent='Total '+money(carrinho.reduce((s,i)=>s+i.preco*i.qtd,0)) }
+async function finalizarPedido(){
+  if(!carrinho.length) return alert('Adicione pelo menos um item.')
+  const body = { action:'criar_cardapio', codigo:CONFIG.codigo, pedido_token:CONFIG.pedidoToken, origem:tipoEntrega.value, itens:carrinho, cliente_nome:clienteNome.value, telefone:clienteTelefone.value, endereco:clienteEndereco.value, tipo_entrega:tipoEntrega.value, forma_pagamento:formaPagamento.value, observacao:observacao.value }
+  const r = await fetch(CONFIG.apiUrl+'?action=pedidos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})
+  const data = await r.json().catch(()=>({}))
+  if(!r.ok || !data.ok) return alert('Nao foi possivel enviar o pedido. Tente novamente.')
+  alert('Pedido enviado! Numero '+(data.pedido?.numero||''))
+  if(CONFIG.whatsapp){ const text = `Novo pedido #${data.pedido?.numero||''}\nCliente: ${clienteNome.value}\nTotal: ${cartTotal.textContent}`; location.href = 'https://wa.me/'+CONFIG.whatsapp+'?text='+encodeURIComponent(text) }
+}
+render(); updateCart()
+</script>
+</body>
+</html>
